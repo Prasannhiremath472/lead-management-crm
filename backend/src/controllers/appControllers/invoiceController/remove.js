@@ -1,35 +1,41 @@
-const mongoose = require('mongoose');
-
-const Model = mongoose.model('Invoice');
-const ModelPayment = mongoose.model('Payment');
+const pool = require('@/db/pool');
+const { withMongoIdShim } = require('@/db/queryBuilder');
 
 const remove = async (req, res) => {
-  const deletedInvoice = await Model.findOneAndUpdate(
-    {
-      _id: req.params.id,
-      removed: false,
-    },
-    {
-      $set: {
-        removed: true,
-      },
-    }
-  ).exec();
+  const conn = await pool.getConnection();
+  let updatedRows;
+  try {
+    await conn.beginTransaction();
 
-  if (!deletedInvoice) {
-    return res.status(404).json({
-      success: false,
-      result: null,
-      message: 'Invoice not found',
-    });
+    const [updateResult] = await conn.query(
+      'UPDATE invoices SET removed = 1 WHERE id = ? AND removed = 0',
+      [req.params.id]
+    );
+
+    if (updateResult.affectedRows === 0) {
+      await conn.rollback();
+      return res.status(404).json({
+        success: false,
+        result: null,
+        message: 'Invoice not found',
+      });
+    }
+
+    await conn.query('UPDATE payments SET removed = 1 WHERE invoice_id = ?', [req.params.id]);
+
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
   }
-  const paymentsInvoices = await ModelPayment.updateMany(
-    { invoice: deletedInvoice._id },
-    { $set: { removed: true } }
-  );
+
+  const [rows] = await pool.query('SELECT * FROM invoices WHERE id = ?', [req.params.id]);
+
   return res.status(200).json({
     success: true,
-    result: deletedInvoice,
+    result: withMongoIdShim(rows[0]),
     message: 'Invoice deleted successfully',
   });
 };

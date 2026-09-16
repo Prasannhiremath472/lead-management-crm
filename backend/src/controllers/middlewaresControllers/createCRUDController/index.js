@@ -1,6 +1,4 @@
-const { modelsFiles } = require('@/models/utils');
-
-const mongoose = require('mongoose');
+const { getModel } = require('@/db/models');
 
 const create = require('./create');
 const read = require('./read');
@@ -13,21 +11,18 @@ const listAll = require('./listAll');
 const paginatedList = require('./paginatedList');
 
 const createCRUDController = (modelName) => {
-  if (!modelsFiles.includes(modelName)) {
-    throw new Error(`Model ${modelName} does not exist`);
-  }
+  const modelDef = getModel(modelName);
 
-  const Model = mongoose.model(modelName);
   let crudMethods = {
-    create: (req, res) => create(Model, req, res),
-    read: (req, res) => read(Model, req, res),
-    update: (req, res) => update(Model, req, res),
-    delete: (req, res) => remove(Model, req, res),
-    list: (req, res) => paginatedList(Model, req, res),
-    listAll: (req, res) => listAll(Model, req, res),
-    search: (req, res) => search(Model, req, res),
-    filter: (req, res) => filter(Model, req, res),
-    summary: (req, res) => summary(Model, req, res),
+    create: (req, res) => create(modelDef, req, res),
+    read: (req, res) => read(modelDef, req, res),
+    update: (req, res) => update(modelDef, req, res),
+    delete: (req, res) => remove(modelDef, req, res),
+    list: (req, res) => paginatedList(modelDef, req, res),
+    listAll: (req, res) => listAll(modelDef, req, res),
+    search: (req, res) => search(modelDef, req, res),
+    filter: (req, res) => filter(modelDef, req, res),
+    summary: (req, res) => summary(modelDef, req, res),
   };
   return crudMethods;
 };

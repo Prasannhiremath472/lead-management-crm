@@ -1,5 +1,5 @@
 const createCRUDController = require('@/controllers/middlewaresControllers/createCRUDController');
-const { routesList } = require('@/models/utils');
+const { routesList } = require('@/db/models');
 
 const { globSync } = require('glob');
 const path = require('path');

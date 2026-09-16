@@ -1,12 +1,9 @@
 const Joi = require('joi');
 
-const mongoose = require('mongoose');
-
+const pool = require('@/db/pool');
 const authUser = require('./authUser');
 
-const login = async (req, res, { userModel }) => {
-  const UserPasswordModel = mongoose.model(userModel + 'Password');
-  const UserModel = mongoose.model(userModel);
+const login = async (req, res) => {
   const { email, password } = req.body;
 
   // validate
@@ -28,7 +25,8 @@ const login = async (req, res, { userModel }) => {
     });
   }
 
-  const user = await UserModel.findOne({ email: email, removed: false });
+  const [userRows] = await pool.query('SELECT * FROM admins WHERE email = ? AND removed = 0', [email]);
+  const user = userRows[0];
 
   // console.log(user);
   if (!user)
@@ -38,7 +36,11 @@ const login = async (req, res, { userModel }) => {
       message: 'No account with this email has been registered.',
     });
 
-  const databasePassword = await UserPasswordModel.findOne({ user: user._id, removed: false });
+  const [passwordRows] = await pool.query(
+    'SELECT * FROM admin_passwords WHERE admin_id = ? AND removed = 0',
+    [user.id]
+  );
+  const databasePassword = passwordRows[0];
 
   if (!user.enabled)
     return res.status(409).json({
@@ -52,7 +54,6 @@ const login = async (req, res, { userModel }) => {
     user,
     databasePassword,
     password,
-    UserPasswordModel,
   });
 };
 

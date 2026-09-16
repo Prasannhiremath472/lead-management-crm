@@ -1,8 +1,7 @@
-const mongoose = require('mongoose');
+const pool = require('@/db/pool');
+const { withMongoIdShim } = require('@/db/queryBuilder');
 
 const updateProfile = async (userModel, req, res) => {
-  const User = mongoose.model(userModel);
-
   const reqUserName = userModel.toLowerCase();
   const userProfile = req[reqUserName];
 
@@ -18,47 +17,43 @@ const updateProfile = async (userModel, req, res) => {
     });
   }
 
-  let updates = req.body.photo
-    ? {
-        email: req.body.email,
-        name: req.body.name,
-        surname: req.body.surname,
-        photo: req.body.photo,
-      }
-    : {
-        email: req.body.email,
-        name: req.body.name,
-        surname: req.body.surname,
-      };
-  // Find document by id and updates with the required fields
-  const result = await User.findOneAndUpdate(
-    { _id: userProfile._id, removed: false },
-    { $set: updates },
-    {
-      new: true, // return the new result instead of the old one
-    }
-  ).exec();
+  if (req.body.photo) {
+    await pool.query(
+      'UPDATE admins SET email = ?, name = ?, surname = ?, photo = ? WHERE id = ? AND removed = 0',
+      [req.body.email, req.body.name, req.body.surname, req.body.photo, userProfile.id]
+    );
+  } else {
+    await pool.query('UPDATE admins SET email = ?, name = ?, surname = ? WHERE id = ? AND removed = 0', [
+      req.body.email,
+      req.body.name,
+      req.body.surname,
+      userProfile.id,
+    ]);
+  }
+
+  const [rows] = await pool.query('SELECT * FROM admins WHERE id = ? AND removed = 0', [userProfile.id]);
+  const result = rows[0];
 
   if (!result) {
     return res.status(404).json({
       success: false,
       result: null,
-      message: 'No profile found by this id: ' + userProfile._id,
+      message: 'No profile found by this id: ' + userProfile.id,
     });
   }
   return res.status(200).json({
     success: true,
-    result: {
-      _id: result?._id,
+    result: withMongoIdShim({
+      id: result?.id,
       enabled: result?.enabled,
       email: result?.email,
       name: result?.name,
       surname: result?.surname,
       photo: result?.photo,
       role: result?.role,
-      token
-    },
-    message: 'we update this profile by this id: ' + userProfile._id,
+      token,
+    }),
+    message: 'we update this profile by this id: ' + userProfile.id,
   });
 };
 

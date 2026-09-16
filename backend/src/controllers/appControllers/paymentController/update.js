@@ -1,8 +1,5 @@
-const mongoose = require('mongoose');
-
-const Model = mongoose.model('Payment');
-const Invoice = mongoose.model('Invoice');
-const custom = require('@/controllers/pdfController');
+const pool = require('@/db/pool');
+const { withMongoIdShim } = require('@/db/queryBuilder');
 
 const { calculate } = require('@/helpers');
 
@@ -14,14 +11,28 @@ const update = async (req, res) => {
       message: `The Minimum Amount couldn't be 0`,
     });
   }
-  // Find document by id and updates with the required fields
-  const previousPayment = await Model.findOne({
-    _id: req.params.id,
-    removed: false,
-  });
 
-  const { amount: previousAmount } = previousPayment;
-  const { id: invoiceId, total, discount, credit: previousCredit } = previousPayment.invoice;
+  // Explicit JOIN replacing the old mongoose-autopopulate on `previousPayment.invoice`.
+  const [rows] = await pool.query(
+    `SELECT p.id, p.amount AS previous_amount, p.invoice_id,
+            i.total, i.discount, i.credit AS previous_credit
+     FROM payments p JOIN invoices i ON i.id = p.invoice_id
+     WHERE p.id = ? AND p.removed = 0`,
+    [req.params.id]
+  );
+
+  const previousPayment = rows[0];
+
+  if (!previousPayment) {
+    return res.status(404).json({
+      success: false,
+      result: null,
+      message: 'No document found ',
+    });
+  }
+
+  const { previous_amount: previousAmount, invoice_id: invoiceId, total, discount, previous_credit: previousCredit } =
+    previousPayment;
 
   const { amount: currentAmount } = req.body;
 
@@ -37,7 +48,7 @@ const update = async (req, res) => {
     });
   }
 
-  let paymentStatus =
+  const paymentStatus =
     calculate.sub(total, discount) === calculate.add(previousCredit, changedAmount)
       ? 'paid'
       : calculate.add(previousCredit, changedAmount) > 0
@@ -45,40 +56,39 @@ const update = async (req, res) => {
       : 'unpaid';
 
   const updatedDate = new Date();
-  const updates = {
-    number: req.body.number,
-    date: req.body.date,
-    amount: req.body.amount,
-    paymentMode: req.body.paymentMode,
-    ref: req.body.ref,
-    description: req.body.description,
-    updated: updatedDate,
-  };
 
-  const result = await Model.findOneAndUpdate(
-    { _id: req.params.id, removed: false },
-    { $set: updates },
-    {
-      new: true, // return the new result instead of the old one
-    }
-  ).exec();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
 
-  const updateInvoice = await Invoice.findOneAndUpdate(
-    { _id: result.invoice._id.toString() },
-    {
-      $inc: { credit: changedAmount },
-      $set: {
-        paymentStatus: paymentStatus,
-      },
-    },
-    {
-      new: true, // return the new result instead of the old one
-    }
-  ).exec();
+    // Same explicit column whitelist as the current file. `paymentMode` is
+    // dropped: it isn't a real column anywhere and was already a dead,
+    // non-functional reference in the pre-rewrite code.
+    await conn.query(
+      `UPDATE payments SET number = ?, date = ?, amount = ?, ref = ?, description = ?, updated = ?
+       WHERE id = ? AND removed = 0`,
+      [req.body.number, req.body.date, req.body.amount, req.body.ref, req.body.description, updatedDate, req.params.id]
+    );
+
+    await conn.query('UPDATE invoices SET credit = credit + ?, payment_status = ? WHERE id = ?', [
+      changedAmount,
+      paymentStatus,
+      invoiceId,
+    ]);
+
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+
+  const [updatedRows] = await pool.query('SELECT * FROM payments WHERE id = ?', [req.params.id]);
 
   return res.status(200).json({
     success: true,
-    result,
+    result: withMongoIdShim(updatedRows[0]),
     message: 'Successfully updated the Payment ',
   });
 };

@@ -1,7 +1,4 @@
-const mongoose = require('mongoose');
-const moment = require('moment');
-
-const Model = mongoose.model('Invoice');
+const pool = require('@/db/pool');
 
 const { loadSettings } = require('@/middlewares/settings');
 
@@ -24,112 +21,42 @@ const summary = async (req, res) => {
     }
   }
 
-  const currentDate = moment();
-  let startDate = currentDate.clone().startOf(defaultType);
-  let endDate = currentDate.clone().endOf(defaultType);
-
   const statuses = ['draft', 'pending', 'overdue', 'paid', 'unpaid', 'partially'];
 
-  const response = await Model.aggregate([
-    {
-      $match: {
-        removed: false,
-        // date: {
-        //   $gte: startDate.toDate(),
-        //   $lte: endDate.toDate(),
-        // },
-      },
-    },
-    {
-      $facet: {
-        totalInvoice: [
-          {
-            $group: {
-              _id: null,
-              total: {
-                $sum: '$total',
-              },
-              count: {
-                $sum: 1,
-              },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              total: '$total',
-              count: '$count',
-            },
-          },
-        ],
-        statusCounts: [
-          {
-            $group: {
-              _id: '$status',
-              count: {
-                $sum: 1,
-              },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              status: '$_id',
-              count: '$count',
-            },
-          },
-        ],
-        paymentStatusCounts: [
-          {
-            $group: {
-              _id: '$paymentStatus',
-              count: {
-                $sum: 1,
-              },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              status: '$_id',
-              count: '$count',
-            },
-          },
-        ],
-        overdueCounts: [
-          {
-            $match: {
-              expiredDate: {
-                $lt: new Date(),
-              },
-            },
-          },
-          {
-            $group: {
-              _id: '$status',
-              count: {
-                $sum: 1,
-              },
-            },
-          },
-          {
-            $project: {
-              _id: 0,
-              status: '$_id',
-              count: '$count',
-            },
-          },
-        ],
-      },
-    },
+  const [
+    [totalInvoiceRows],
+    [statusRows],
+    [paymentStatusRows],
+    [overdueRows],
+    [unpaidRows],
+  ] = await Promise.all([
+    pool.query(
+      `SELECT COUNT(*) AS count, COALESCE(SUM(total), 0) AS total FROM invoices WHERE removed = 0`
+    ),
+    pool.query(
+      `SELECT status, COUNT(*) AS count FROM invoices WHERE removed = 0 GROUP BY status`
+    ),
+    pool.query(
+      `SELECT payment_status, COUNT(*) AS count FROM invoices WHERE removed = 0 GROUP BY payment_status`
+    ),
+    pool.query(
+      `SELECT status, COUNT(*) AS count FROM invoices WHERE removed = 0 AND expired_date < CURDATE() GROUP BY status`
+    ),
+    pool.query(
+      `SELECT COALESCE(SUM(total - credit), 0) AS total_amount FROM invoices WHERE removed = 0 AND payment_status IN ('unpaid', 'partially')`
+    ),
   ]);
 
   let result = [];
 
-  const totalInvoices = response[0].totalInvoice ? response[0].totalInvoice[0] : 0;
-  const statusResult = response[0].statusCounts || [];
-  const paymentStatusResult = response[0].paymentStatusCounts || [];
-  const overdueResult = response[0].overdueCounts || [];
+  const totalInvoices = totalInvoiceRows[0] || { count: 0, total: 0 };
+
+  const statusResult = statusRows.map((r) => ({ status: r.status, count: r.count }));
+  const paymentStatusResult = paymentStatusRows.map((r) => ({
+    status: r.payment_status,
+    count: r.count,
+  }));
+  const overdueResult = overdueRows.map((r) => ({ status: r.status, count: r.count }));
 
   const statusResultMap = statusResult.map((item) => {
     return {
@@ -162,37 +89,7 @@ const summary = async (req, res) => {
     }
   });
 
-  const unpaid = await Model.aggregate([
-    {
-      $match: {
-        removed: false,
-
-        // date: {
-        //   $gte: startDate.toDate(),
-        //   $lte: endDate.toDate(),
-        // },
-        paymentStatus: {
-          $in: ['unpaid', 'partially'],
-        },
-      },
-    },
-    {
-      $group: {
-        _id: null,
-        total_amount: {
-          $sum: {
-            $subtract: ['$total', '$credit'],
-          },
-        },
-      },
-    },
-    {
-      $project: {
-        _id: 0,
-        total_amount: '$total_amount',
-      },
-    },
-  ]);
+  const unpaid = unpaidRows;
 
   const finalResult = {
     total: totalInvoices?.total,

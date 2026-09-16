@@ -1,34 +1,23 @@
-import { Button, Result } from 'antd';
+import { Result } from 'antd';
 
 import useLanguage from '@/locale/useLanguage';
+import { SOURCE_CODE_URL } from '@/config/serverApiConfig';
 
 const About = () => {
   const translate = useLanguage();
   return (
     <Result
       status="info"
-      title={'IDURAR'}
-      subTitle={translate('Do you need help on customize of this app')}
+      title={translate('About')}
+      subTitle={translate('CRM / ERP for accounting, invoicing, and quotes')}
       extra={
-        <>
-          <p>
-            Website : <a href="https://www.idurarapp.com">www.idurarapp.com</a>{' '}
-          </p>
-          <p>
-            GitHub :{' '}
-            <a href="https://github.com/idurar/idurar-erp-crm">
-              https://github.com/idurar/idurar-erp-crm
-            </a>
-          </p>
-          <Button
-            type="primary"
-            onClick={() => {
-              window.open(`https://www.idurarapp.com/contact-us/`);
-            }}
-          >
-            {translate('Contact us')}
-          </Button>
-        </>
+        <p>
+          {translate('This application is licensed under the AGPLv3')}
+          {' — '}
+          <a href={SOURCE_CODE_URL} target="_blank" rel="noreferrer">
+            {translate('Source Code')}
+          </a>
+        </p>
       }
     />
   );

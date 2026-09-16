@@ -1,17 +1,15 @@
-const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const { generate: uniqueId } = require('shortid');
 
-const updateProfilePassword = async (userModel, req, res) => {
-  const UserPassword = mongoose.model(userModel + 'Password');
+const pool = require('@/db/pool');
 
+const updateProfilePassword = async (userModel, req, res) => {
   const reqUserName = userModel.toLowerCase();
   const userProfile = req[reqUserName];
   let { password, passwordCheck } = req.body;
 
-  if (!password || !passwordCheck)
-    return res.status(400).json({ msg: 'Not all fields have been entered.' });
+  if (!password || !passwordCheck) return res.status(400).json({ msg: 'Not all fields have been entered.' });
 
   if (password.length < 8)
     return res.status(400).json({
@@ -27,11 +25,6 @@ const updateProfilePassword = async (userModel, req, res) => {
 
   const passwordHash = bcrypt.hashSync(salt + password);
 
-  const UserPasswordData = {
-    password: passwordHash,
-    salt: salt,
-  };
-
   if (userProfile.email === 'admin@admin.com') {
     return res.status(403).json({
       success: false,
@@ -39,15 +32,13 @@ const updateProfilePassword = async (userModel, req, res) => {
       message: "you couldn't update demo password",
     });
   }
-  const resultPassword = await UserPassword.findOneAndUpdate(
-    { user: userProfile._id, removed: false },
-    { $set: UserPasswordData },
-    {
-      new: true, // return the new result instead of the old one
-    }
-  ).exec();
 
-  if (!resultPassword) {
+  const [updateResult] = await pool.query(
+    'UPDATE admin_passwords SET password = ?, salt = ? WHERE admin_id = ? AND removed = 0',
+    [passwordHash, salt, userProfile.id]
+  );
+
+  if (!updateResult || updateResult.affectedRows === 0) {
     return res.status(403).json({
       success: false,
       result: null,
@@ -58,7 +49,7 @@ const updateProfilePassword = async (userModel, req, res) => {
   return res.status(200).json({
     success: true,
     result: {},
-    message: 'we update the password by this id: ' + userProfile._id,
+    message: 'we update the password by this id: ' + userProfile.id,
   });
 };
 

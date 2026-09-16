@@ -1,8 +1,5 @@
-const mongoose = require('mongoose');
-
-const Model = mongoose.model('Payment');
-const Invoice = mongoose.model('Invoice');
-const custom = require('@/controllers/pdfController');
+const pool = require('@/db/pool');
+const { withMongoIdShim } = require('@/db/queryBuilder');
 
 const { calculate } = require('@/helpers');
 
@@ -16,10 +13,10 @@ const create = async (req, res) => {
     });
   }
 
-  const currentInvoice = await Invoice.findOne({
-    _id: req.body.invoice,
-    removed: false,
-  });
+  const [invoiceRows] = await pool.query('SELECT * FROM invoices WHERE id = ? AND removed = 0', [
+    req.body.invoice,
+  ]);
+  const currentInvoice = invoiceRows[0];
 
   const {
     total: previousTotal,
@@ -36,49 +33,65 @@ const create = async (req, res) => {
       message: `The Max Amount you can add is ${maxAmount}`,
     });
   }
-  req.body['createdBy'] = req.admin._id;
 
-  const result = await Model.create(req.body);
+  const createdBy = req.admin.id;
+  const { amount, number, date, ref, description, client, invoice, currency } = req.body;
 
-  const fileId = 'payment-' + result._id + '.pdf';
-  const updatePath = await Model.findOneAndUpdate(
-    {
-      _id: result._id.toString(),
-      removed: false,
-    },
-    { pdf: fileId },
-    {
-      new: true,
-    }
-  ).exec();
-  // Returning successfull response
+  const { total, discount, credit } = currentInvoice;
 
-  const { _id: paymentId, amount } = result;
-  const { id: invoiceId, total, discount, credit } = currentInvoice;
-
-  let paymentStatus =
+  const paymentStatus =
     calculate.sub(total, discount) === calculate.add(credit, amount)
       ? 'paid'
       : calculate.add(credit, amount) > 0
       ? 'partially'
       : 'unpaid';
 
-  const invoiceUpdate = await Invoice.findOneAndUpdate(
-    { _id: req.body.invoice },
-    {
-      $push: { payment: paymentId.toString() },
-      $inc: { credit: amount },
-      $set: { paymentStatus: paymentStatus },
-    },
-    {
-      new: true, // return the new result instead of the old one
-      runValidators: true,
-    }
-  ).exec();
+  const conn = await pool.getConnection();
+  let insertId;
+  try {
+    await conn.beginTransaction();
+
+    const [insertResult] = await conn.query(
+      `INSERT INTO payments
+        (removed, created_by, number, client_id, invoice_id, date, amount, currency, ref, description)
+       VALUES (0, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        createdBy,
+        number,
+        client,
+        invoice,
+        date,
+        amount,
+        currency || 'NA',
+        ref || null,
+        description || null,
+      ]
+    );
+
+    insertId = insertResult.insertId;
+
+    const fileId = 'payment-' + insertId + '.pdf';
+    await conn.query('UPDATE payments SET pdf = ? WHERE id = ?', [fileId, insertId]);
+
+    await conn.query('UPDATE invoices SET credit = credit + ?, payment_status = ? WHERE id = ?', [
+      amount,
+      paymentStatus,
+      invoice,
+    ]);
+
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+
+  const [paymentRows] = await pool.query('SELECT * FROM payments WHERE id = ?', [insertId]);
 
   return res.status(200).json({
     success: true,
-    result: updatePath,
+    result: withMongoIdShim(paymentRows[0]),
     message: 'Payment Invoice created successfully',
   });
 };

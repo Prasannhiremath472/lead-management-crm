@@ -3,7 +3,7 @@ const { catchErrors } = require('@/handlers/errorHandlers');
 const router = express.Router();
 
 const appControllers = require('@/controllers/appControllers');
-const { routesList } = require('@/models/utils');
+const { routesList } = require('@/db/models');
 
 const routerApp = (entity, controller) => {
   router.route(`/${entity}/create`).post(catchErrors(controller['create']));
@@ -16,12 +16,8 @@ const routerApp = (entity, controller) => {
   router.route(`/${entity}/filter`).get(catchErrors(controller['filter']));
   router.route(`/${entity}/summary`).get(catchErrors(controller['summary']));
 
-  if (entity === 'invoice' || entity === 'quote' || entity === 'payment') {
+  if (entity === 'invoice' || entity === 'payment') {
     router.route(`/${entity}/mail`).post(catchErrors(controller['mail']));
-  }
-
-  if (entity === 'quote') {
-    router.route(`/${entity}/convert/:id`).get(catchErrors(controller['convert']));
   }
 };
 

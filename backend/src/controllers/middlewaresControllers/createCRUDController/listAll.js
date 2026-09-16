@@ -1,31 +1,26 @@
-const listAll = async (Model, req, res) => {
-  const sort = req.query.sort || 'desc';
-  const enabled = req.query.enabled || undefined;
+const pool = require('@/db/pool');
+const { withMongoIdShim } = require('@/db/queryBuilder');
 
-  //  Query the database for a list of all results
+const listAll = async (modelDef, req, res) => {
+  const sort = String(req.query.sort || 'desc').toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+  const enabled = req.query.enabled;
 
-  let result;
-  if (enabled === undefined) {
-    result = await Model.find({
-      removed: false,
-    })
-      .sort({ created: sort })
-      .populate()
-      .exec();
-  } else {
-    result = await Model.find({
-      removed: false,
-      enabled: enabled,
-    })
-      .sort({ created: sort })
-      .populate()
-      .exec();
+  let sql = `SELECT * FROM ${modelDef.tableName} WHERE removed = 0`;
+  const values = [];
+
+  if (enabled !== undefined) {
+    sql += ' AND enabled = ?';
+    values.push(enabled === 'true' || enabled === '1' || enabled === true ? 1 : 0);
   }
 
-  if (result.length > 0) {
+  sql += ` ORDER BY created ${sort}`;
+
+  const [rows] = await pool.query(sql, values);
+
+  if (rows.length > 0) {
     return res.status(200).json({
       success: true,
-      result,
+      result: withMongoIdShim(rows),
       message: 'Successfully found all documents',
     });
   } else {

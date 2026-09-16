@@ -1,10 +1,9 @@
-const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const { generate: uniqueId } = require('shortid');
 
-const updatePassword = async (userModel, req, res) => {
-  const UserPassword = mongoose.model(userModel + 'Password');
+const pool = require('@/db/pool');
 
+const updatePassword = async (userModel, req, res) => {
   const reqUserName = userModel.toLowerCase();
   const userProfile = req[reqUserName];
 
@@ -29,22 +28,14 @@ const updatePassword = async (userModel, req, res) => {
 
   const passwordHash = bcrypt.hashSync(salt + password);
 
-  const UserPasswordData = {
-    password: passwordHash,
-    salt: salt,
-  };
-
-  const resultPassword = await UserPassword.findOneAndUpdate(
-    { user: req.params.id, removed: false },
-    { $set: UserPasswordData },
-    {
-      new: true, // return the new result instead of the old one
-    }
-  ).exec();
+  const [updateResult] = await pool.query(
+    'UPDATE admin_passwords SET password = ?, salt = ? WHERE admin_id = ? AND removed = 0',
+    [passwordHash, salt, req.params.id]
+  );
 
   // Code to handle the successful response
 
-  if (!resultPassword) {
+  if (!updateResult || updateResult.affectedRows === 0) {
     return res.status(403).json({
       success: false,
       result: null,
@@ -55,7 +46,7 @@ const updatePassword = async (userModel, req, res) => {
   return res.status(200).json({
     success: true,
     result: {},
-    message: 'we update the password by this id: ' + userProfile._id,
+    message: 'we update the password by this id: ' + userProfile.id,
   });
 };
 

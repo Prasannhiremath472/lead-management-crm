@@ -1,0 +1,23 @@
+module.exports = {
+  tableName: 'clients',
+  entity: 'client',
+  primaryKey: 'id',
+  columns: [
+    'id',
+    'removed',
+    'enabled',
+    'name',
+    'phone',
+    'country',
+    'address',
+    'email',
+    'created_by',
+    'assigned',
+    'created',
+    'updated',
+  ],
+  filterableFields: ['name', 'email', 'phone', 'country', 'enabled', 'created_by', 'assigned'],
+  searchableFields: ['name', 'email', 'phone', 'address'],
+  sortableFields: ['name', 'created', 'updated', 'enabled'],
+  defaultSort: 'enabled',
+};

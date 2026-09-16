@@ -1,19 +1,23 @@
-const mongoose = require('mongoose');
-const Model = mongoose.model('Setting');
+const pool = require('@/db/pool');
+const { parseValue } = require('@/db/models/settingModel');
+const { withMongoIdShim } = require('@/db/queryBuilder');
 
 const listAll = async (req, res) => {
-  const sort = parseInt(req.query.sort) || 'desc';
+  const sort = req.query.sort && parseInt(req.query.sort) === 1 ? 'ASC' : 'DESC';
 
-  //  Query the database for a list of all results
-  const result = await Model.find({
-    removed: false,
-    isPrivate: false,
-  }).sort({ created: sort });
+  // Query the database for a list of all results
+  const [rows] = await pool.query(
+    `SELECT * FROM settings WHERE removed = 0 AND is_private = 0 ORDER BY id ${sort}`
+  );
 
-  if (result.length > 0) {
+  if (rows.length > 0) {
+    const result = rows.map((row) => ({
+      ...row,
+      setting_value: parseValue(row.value_type, row.setting_value),
+    }));
     return res.status(200).json({
       success: true,
-      result,
+      result: withMongoIdShim(result),
       message: 'Successfully found all documents',
     });
   } else {

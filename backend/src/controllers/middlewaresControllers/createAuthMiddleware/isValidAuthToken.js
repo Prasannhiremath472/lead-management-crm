@@ -1,12 +1,9 @@
 const jwt = require('jsonwebtoken');
 
-const mongoose = require('mongoose');
+const pool = require('@/db/pool');
 
-const isValidAuthToken = async (req, res, next, { userModel, jwtSecret = 'JWT_SECRET' }) => {
+const isValidAuthToken = async (req, res, next, jwtSecret = 'JWT_SECRET') => {
   try {
-    const UserPassword = mongoose.model(userModel + 'Password');
-    const User = mongoose.model(userModel);
-
     // const token = req.cookies[`token_${cloud._id}`];
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1]; // Extract the token
@@ -29,10 +26,15 @@ const isValidAuthToken = async (req, res, next, { userModel, jwtSecret = 'JWT_SE
         jwtExpired: true,
       });
 
-    const userPasswordPromise = UserPassword.findOne({ user: verified.id, removed: false });
-    const userPromise = User.findOne({ _id: verified.id, removed: false });
+    const userPasswordPromise = pool.query(
+      'SELECT * FROM admin_passwords WHERE admin_id = ? AND removed = 0',
+      [verified.id]
+    );
+    const userPromise = pool.query('SELECT * FROM admins WHERE id = ? AND removed = 0', [verified.id]);
 
-    const [user, userPassword] = await Promise.all([userPromise, userPasswordPromise]);
+    const [[userPasswordRows], [userRows]] = await Promise.all([userPasswordPromise, userPromise]);
+    const userPassword = userPasswordRows[0];
+    const user = userRows[0];
 
     if (!user)
       return res.status(401).json({
@@ -42,9 +44,12 @@ const isValidAuthToken = async (req, res, next, { userModel, jwtSecret = 'JWT_SE
         jwtExpired: true,
       });
 
-    const { loggedSessions } = userPassword;
+    const [sessionRows] = await pool.query(
+      'SELECT 1 FROM admin_sessions WHERE admin_id = ? AND token = ? LIMIT 1',
+      [verified.id, token]
+    );
 
-    if (!loggedSessions.includes(token))
+    if (sessionRows.length === 0)
       return res.status(401).json({
         success: false,
         result: null,
@@ -52,8 +57,7 @@ const isValidAuthToken = async (req, res, next, { userModel, jwtSecret = 'JWT_SE
         jwtExpired: true,
       });
     else {
-      const reqUserName = userModel.toLowerCase();
-      req[reqUserName] = user;
+      req.admin = user;
       next();
     }
   } catch (error) {

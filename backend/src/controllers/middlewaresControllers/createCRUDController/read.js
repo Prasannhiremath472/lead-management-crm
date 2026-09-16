@@ -1,21 +1,22 @@
-const read = async (Model, req, res) => {
-  // Find document by id
-  const result = await Model.findOne({
-    _id: req.params.id,
-    removed: false,
-  }).exec();
-  // If no results found, return document not found
-  if (!result) {
+const pool = require('@/db/pool');
+const { withMongoIdShim } = require('@/db/queryBuilder');
+
+const read = async (modelDef, req, res) => {
+  const [rows] = await pool.query(
+    `SELECT * FROM ${modelDef.tableName} WHERE ${modelDef.primaryKey} = ? AND removed = 0`,
+    [req.params.id]
+  );
+
+  if (rows.length === 0) {
     return res.status(404).json({
       success: false,
       result: null,
       message: 'No document found ',
     });
   } else {
-    // Return success resposne
     return res.status(200).json({
       success: true,
-      result,
+      result: withMongoIdShim(rows[0]),
       message: 'we found this document ',
     });
   }

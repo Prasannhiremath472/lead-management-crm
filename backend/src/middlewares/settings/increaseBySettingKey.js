@@ -1,6 +1,5 @@
-const mongoose = require('mongoose');
-
-const Model = mongoose.model('Setting');
+const pool = require('@/db/pool');
+const { parseValue } = require('@/db/models/settingModel');
 
 const increaseBySettingKey = async ({ settingKey }) => {
   try {
@@ -8,23 +7,23 @@ const increaseBySettingKey = async ({ settingKey }) => {
       return null;
     }
 
-    const result = await Model.findOneAndUpdate(
-      { settingKey },
-      {
-        $inc: { settingValue: 1 },
-      },
-      {
-        new: true, // return the new result instead of the old one
-        runValidators: true,
-      }
-    ).exec();
+    await pool.query(
+      'UPDATE settings SET setting_value = CAST(CAST(setting_value AS SIGNED) + 1 AS CHAR) WHERE setting_key = ?',
+      [settingKey]
+    );
+
+    const [rows] = await pool.query('SELECT * FROM settings WHERE setting_key = ?', [settingKey]);
+    const result = rows[0];
 
     // If no results found, return document not found
     if (!result) {
       return null;
     } else {
-      // Return success resposne
-      return result;
+      // Return success response
+      return {
+        ...result,
+        setting_value: parseValue(result.value_type, result.setting_value),
+      };
     }
   } catch {
     return null;

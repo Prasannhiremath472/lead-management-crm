@@ -1,17 +1,23 @@
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const Joi = require('joi');
-const mongoose = require('mongoose');
+
+const pool = require('@/db/pool');
+const { withMongoIdShim } = require('@/db/queryBuilder');
 
 const shortid = require('shortid');
 
-const resetPassword = async (req, res, { userModel }) => {
-  const UserPassword = mongoose.model(userModel + 'Password');
-  const User = mongoose.model(userModel);
+const resetPassword = async (req, res) => {
   const { password, userId, resetToken } = req.body;
 
-  const databasePassword = await UserPassword.findOne({ user: userId, removed: false });
-  const user = await User.findOne({ _id: userId, removed: false }).exec();
+  const [passwordRows] = await pool.query(
+    'SELECT * FROM admin_passwords WHERE admin_id = ? AND removed = 0',
+    [userId]
+  );
+  const databasePassword = passwordRows[0];
+
+  const [userRows] = await pool.query('SELECT * FROM admins WHERE id = ? AND removed = 0', [userId]);
+  const user = userRows[0];
 
   if (!user.enabled)
     return res.status(409).json({
@@ -27,8 +33,8 @@ const resetPassword = async (req, res, { userModel }) => {
       message: 'No account with this email has been registered.',
     });
 
-  const isMatch = resetToken === databasePassword.resetToken;
-  if (!isMatch || databasePassword.resetToken === undefined || databasePassword.resetToken === null)
+  const isMatch = resetToken === databasePassword.reset_token;
+  if (!isMatch || databasePassword.reset_token === undefined || databasePassword.reset_token === null)
     return res.status(403).json({
       success: false,
       result: null,
@@ -56,6 +62,7 @@ const resetPassword = async (req, res, { userModel }) => {
   const salt = shortid.generate();
   const hashedPassword = bcrypt.hashSync(salt + password);
   const emailToken = shortid.generate();
+  const newResetToken = shortid.generate();
 
   const token = jwt.sign(
     {
@@ -65,25 +72,29 @@ const resetPassword = async (req, res, { userModel }) => {
     { expiresIn: '24h' }
   );
 
-  await UserPassword.findOneAndUpdate(
-    { user: userId },
-    {
-      $push: { loggedSessions: token },
-      password: hashedPassword,
-      salt: salt,
-      emailToken: emailToken,
-      resetToken: shortid.generate(),
-      emailVerified: true,
-    },
-    {
-      new: true,
-    }
-  ).exec();
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    await connection.query(
+      'UPDATE admin_passwords SET password = ?, salt = ?, email_token = ?, reset_token = ?, email_verified = 1 WHERE admin_id = ?',
+      [hashedPassword, salt, emailToken, newResetToken, userId]
+    );
+
+    await connection.query('INSERT INTO admin_sessions (admin_id, token) VALUES (?, ?)', [userId, token]);
+
+    await connection.commit();
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
+  }
 
   if (
-    resetToken === databasePassword.resetToken &&
-    databasePassword.resetToken !== undefined &&
-    databasePassword.resetToken !== null
+    resetToken === databasePassword.reset_token &&
+    databasePassword.reset_token !== undefined &&
+    databasePassword.reset_token !== null
   )
     //  .cookie(`token_${user.cloud}`, token, {
     //       maxAge: 24 * 60 * 60 * 1000,
@@ -96,8 +107,8 @@ const resetPassword = async (req, res, { userModel }) => {
     //     })
     return res.status(200).json({
       success: true,
-      result: {
-        _id: user._id,
+      result: withMongoIdShim({
+        id: user.id,
         name: user.name,
         surname: user.surname,
         role: user.role,
@@ -105,7 +116,7 @@ const resetPassword = async (req, res, { userModel }) => {
         photo: user.photo,
         token: token,
         maxAge: req.body.remember ? 365 : null,
-      },
+      }),
       message: 'Successfully resetPassword user',
     });
 };

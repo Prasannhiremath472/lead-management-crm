@@ -1,6 +1,6 @@
 const Joi = require('joi');
 
-const mongoose = require('mongoose');
+const pool = require('@/db/pool');
 
 const checkAndCorrectURL = require('./checkAndCorrectURL');
 const sendMail = require('./sendMail');
@@ -9,9 +9,7 @@ const { loadSettings } = require('@/middlewares/settings');
 
 const { useAppSettings } = require('@/settings');
 
-const forgetPassword = async (req, res, { userModel }) => {
-  const UserPassword = mongoose.model(userModel + 'Password');
-  const User = mongoose.model(userModel);
+const forgetPassword = async (req, res) => {
   const { email } = req.body;
 
   // validate
@@ -32,8 +30,8 @@ const forgetPassword = async (req, res, { userModel }) => {
     });
   }
 
-  const user = await User.findOne({ email: email, removed: false });
-  const databasePassword = await UserPassword.findOne({ user: user._id, removed: false });
+  const [userRows] = await pool.query('SELECT * FROM admins WHERE email = ? AND removed = 0', [email]);
+  const user = userRows[0];
 
   // console.log(user);
   if (!user)
@@ -43,14 +41,14 @@ const forgetPassword = async (req, res, { userModel }) => {
       message: 'No account with this email has been registered.',
     });
 
+  const [passwordRows] = await pool.query(
+    'SELECT * FROM admin_passwords WHERE admin_id = ? AND removed = 0',
+    [user.id]
+  );
+  const databasePassword = passwordRows[0];
+
   const resetToken = shortid.generate();
-  await UserPassword.findOneAndUpdate(
-    { user: user._id },
-    { resetToken },
-    {
-      new: true,
-    }
-  ).exec();
+  await pool.query('UPDATE admin_passwords SET reset_token = ? WHERE admin_id = ?', [resetToken, user.id]);
 
   const settings = useAppSettings();
   const idurar_app_email = settings['idurar_app_email'];
@@ -58,13 +56,13 @@ const forgetPassword = async (req, res, { userModel }) => {
 
   const url = checkAndCorrectURL(idurar_base_url);
 
-  const link = url + '/resetpassword/' + user._id + '/' + resetToken;
+  const link = url + '/resetpassword/' + String(user.id) + '/' + resetToken;
 
   await sendMail({
     email,
     name: user.name,
     link,
-    subject: 'Reset your password | idurar',
+    subject: 'Reset your password',
     idurar_app_email,
     type: 'passwordVerfication',
   });

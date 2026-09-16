@@ -1,36 +1,29 @@
-const search = async (Model, req, res) => {
-  // console.log(req.query.fields)
-  // if (req.query.q === undefined || req.query.q.trim() === '') {
-  //   return res
-  //     .status(202)
-  //     .json({
-  //       success: false,
-  //       result: [],
-  //       message: 'No document found by this request',
-  //     })
-  //     .end();
-  // }
-  const fieldsArray = req.query.fields ? req.query.fields.split(',') : ['name'];
+const pool = require('@/db/pool');
+const { buildSearchClause, withMongoIdShim } = require('@/db/queryBuilder');
 
-  const fields = { $or: [] };
+const search = async (modelDef, req, res) => {
+  const searchClause = buildSearchClause(modelDef, req.query.fields, req.query.q);
 
-  for (const field of fieldsArray) {
-    fields.$or.push({ [field]: { $regex: new RegExp(req.query.q, 'i') } });
+  if (!searchClause) {
+    return res
+      .status(202)
+      .json({
+        success: false,
+        result: [],
+        message: 'No document found by this request',
+      })
+      .end();
   }
-  // console.log(fields)
 
-  let results = await Model.find({
-    ...fields,
-  })
+  const [rows] = await pool.query(
+    `SELECT * FROM ${modelDef.tableName} WHERE removed = 0 AND ${searchClause.clause} LIMIT 20`,
+    searchClause.values
+  );
 
-    .where('removed', false)
-    .limit(20)
-    .exec();
-
-  if (results.length >= 1) {
+  if (rows.length >= 1) {
     return res.status(200).json({
       success: true,
-      result: results,
+      result: withMongoIdShim(rows),
       message: 'Successfully found all documents',
     });
   } else {

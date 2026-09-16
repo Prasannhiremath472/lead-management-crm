@@ -1,19 +1,26 @@
-const summary = async (Model, req, res) => {
-  //  Query the database for a list of all results
-  const countPromise = Model.countDocuments({
-    removed: false,
-  });
+const pool = require('@/db/pool');
+const { buildFilterClause } = require('@/db/queryBuilder');
 
-  const resultsPromise = await Model.countDocuments({
-    removed: false,
-  })
-    .where(req.query.filter)
-    .equals(req.query.equal)
-    .exec();
-  // Resolving both promises
-  const [countFilter, countAllDocs] = await Promise.all([resultsPromise, countPromise]);
+const summary = async (modelDef, req, res) => {
+  const countAllPromise = pool.query(
+    `SELECT COUNT(*) AS count FROM ${modelDef.tableName} WHERE removed = 0`
+  );
 
-  if (countAllDocs.length > 0) {
+  const filterClause = buildFilterClause(modelDef, req.query.filter, req.query.equal);
+  const countFilterPromise =
+    filterClause && filterClause !== null
+      ? pool.query(
+          `SELECT COUNT(*) AS count FROM ${modelDef.tableName} WHERE removed = 0 AND ${filterClause.clause}`,
+          filterClause.values
+        )
+      : Promise.resolve([[{ count: 0 }]]);
+
+  const [[countAllRows], [countFilterRows]] = await Promise.all([countAllPromise, countFilterPromise]);
+
+  const countAllDocs = countAllRows[0].count;
+  const countFilter = countFilterRows[0].count;
+
+  if (countAllDocs > 0) {
     return res.status(200).json({
       success: true,
       result: { countFilter, countAllDocs },

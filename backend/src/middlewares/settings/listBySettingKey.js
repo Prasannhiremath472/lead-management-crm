@@ -1,25 +1,26 @@
-const mongoose = require('mongoose');
-
-const Model = mongoose.model('Setting');
+const pool = require('@/db/pool');
+const { parseValue } = require('@/db/models/settingModel');
 
 const listBySettingKey = async ({ settingKeyArray = [] }) => {
   try {
-    // Find document by id
-
-    const settingsToShow = { $or: [] };
+    // Find rows matching any of the requested setting keys
 
     if (settingKeyArray.length === 0) {
       return [];
     }
 
-    for (const settingKey of settingKeyArray) {
-      settingsToShow.$or.push({ settingKey });
-    }
-    let results = await Model.find({ ...settings }).where('removed', false);
+    const placeholders = settingKeyArray.map(() => '?').join(', ');
+    const [rows] = await pool.query(
+      `SELECT * FROM settings WHERE removed = 0 AND setting_key IN (${placeholders})`,
+      settingKeyArray
+    );
 
     // If no results found, return document not found
-    if (results.length >= 1) {
-      return results;
+    if (rows.length >= 1) {
+      return rows.map((row) => ({
+        ...row,
+        setting_value: parseValue(row.value_type, row.setting_value),
+      }));
     } else {
       return [];
     }

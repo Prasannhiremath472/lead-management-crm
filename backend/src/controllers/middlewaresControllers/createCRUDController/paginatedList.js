@@ -1,63 +1,65 @@
-const paginatedList = async (Model, req, res) => {
-  const page = req.query.page || 1;
+const pool = require('@/db/pool');
+const {
+  buildSearchClause,
+  buildFilterClause,
+  buildSortClause,
+  withMongoIdShim,
+} = require('@/db/queryBuilder');
+
+const paginatedList = async (modelDef, req, res) => {
+  const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.items) || 10;
   const skip = page * limit - limit;
 
-  const { sortBy = 'enabled', sortValue = -1, filter, equal } = req.query;
+  const { sortBy, sortValue = -1, filter, equal } = req.query;
 
-  const fieldsArray = req.query.fields ? req.query.fields.split(',') : [];
+  const whereClauses = ['removed = 0'];
+  const whereValues = [];
 
-  let fields;
-
-  fields = fieldsArray.length === 0 ? {} : { $or: [] };
-
-  for (const field of fieldsArray) {
-    fields.$or.push({ [field]: { $regex: new RegExp(req.query.q, 'i') } });
+  if (req.query.fields) {
+    const searchClause = buildSearchClause(modelDef, req.query.fields, req.query.q);
+    if (searchClause) {
+      whereClauses.push(searchClause.clause);
+      whereValues.push(...searchClause.values);
+    }
   }
 
-  // Build filter condition safely: reject MongoDB operators in values
-  let filterCondition = {};
   if (filter && equal !== undefined) {
-    if (typeof equal === 'object') {
+    const filterClause = buildFilterClause(modelDef, filter, equal);
+    if (filterClause === null) {
       return res.status(400).json({
         success: false,
         result: [],
         message: 'Invalid filter value',
       });
     }
-    filterCondition = { [filter]: equal };
+    if (filterClause) {
+      whereClauses.push(filterClause.clause);
+      whereValues.push(...filterClause.values);
+    }
   }
 
-  //  Query the database for a list of all results
-  const resultsPromise = Model.find({
-    removed: false,
-    ...filterCondition,
-    ...fields,
-  })
-    .skip(skip)
-    .limit(limit)
-    .sort({ [sortBy]: sortValue })
-    .populate()
-    .exec();
+  const whereSql = whereClauses.join(' AND ');
+  const orderSql = buildSortClause(modelDef, sortBy, sortValue);
 
-  // Counting the total documents
-  const countPromise = Model.countDocuments({
-    removed: false,
-    ...filterCondition,
-    ...fields,
-  });
-  // Resolving both promises
-  const [result, count] = await Promise.all([resultsPromise, countPromise]);
+  const [rows] = await pool.query(
+    `SELECT * FROM ${modelDef.tableName} WHERE ${whereSql} ORDER BY ${orderSql} LIMIT ? OFFSET ?`,
+    [...whereValues, limit, skip]
+  );
 
-  // Calculating total pages
+  const [countRows] = await pool.query(
+    `SELECT COUNT(*) AS count FROM ${modelDef.tableName} WHERE ${whereSql}`,
+    whereValues
+  );
+  const count = countRows[0].count;
+
   const pages = Math.ceil(count / limit);
-
-  // Getting Pagination Object
   const pagination = { page, pages, count };
+
   if (count > 0) {
     return res.status(200).json({
       success: true,
-      result,
+      result: withMongoIdShim(rows),
       pagination,
       message: 'Successfully found all documents',
     });

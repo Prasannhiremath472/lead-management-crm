@@ -1,6 +1,5 @@
-const mongoose = require('mongoose');
-
-const Model = mongoose.model('Setting');
+const pool = require('@/db/pool');
+const { parseValue, serializeValue } = require('@/db/models/settingModel');
 
 const updateBySettingKey = async ({ settingKey, settingValue }) => {
   try {
@@ -8,22 +7,35 @@ const updateBySettingKey = async ({ settingKey, settingValue }) => {
       return null;
     }
 
-    const result = await Model.findOneAndUpdate(
-      { settingKey },
-      {
-        settingValue,
-      },
-      {
-        new: true, // return the new result instead of the old one
-        runValidators: true,
-      }
-    ).exec();
+    // Need the existing row's value_type to serialize the new value correctly
+    const [existingRows] = await pool.query('SELECT * FROM settings WHERE setting_key = ?', [
+      settingKey,
+    ]);
+    const existing = existingRows[0];
+
+    if (!existing) {
+      return null;
+    }
+
+    const serializedValue = serializeValue(existing.value_type, settingValue);
+
+    await pool.query('UPDATE settings SET setting_value = ? WHERE setting_key = ?', [
+      serializedValue,
+      settingKey,
+    ]);
+
+    const [rows] = await pool.query('SELECT * FROM settings WHERE setting_key = ?', [settingKey]);
+    const result = rows[0];
+
     // If no results found, return document not found
     if (!result) {
       return null;
     } else {
-      // Return success resposne
-      return result;
+      // Return success response
+      return {
+        ...result,
+        setting_value: parseValue(result.value_type, result.setting_value),
+      };
     }
   } catch {
     return null;

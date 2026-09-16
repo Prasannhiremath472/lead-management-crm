@@ -1,23 +1,30 @@
 const custom = require('@/controllers/pdfController');
-const mongoose = require('mongoose');
+const pool = require('@/db/pool');
+const { getModel } = require('@/db/models');
 
 module.exports = downloadPdf = async (req, res, { directory, id }) => {
   try {
     const modelName = directory.slice(0, 1).toUpperCase() + directory.slice(1);
-    if (mongoose.models[modelName]) {
-      const Model = mongoose.model(modelName);
-      const result = await Model.findOne({
-        _id: id,
-      }).exec();
+    let modelDef;
+    try {
+      modelDef = getModel(modelName);
+    } catch (e) {
+      modelDef = null;
+    }
 
-      // Throw error if no result
+    if (modelDef) {
+      const [rows] = await pool.query(`SELECT * FROM ${modelDef.tableName} WHERE id = ?`, [id]);
+      const result = rows[0];
+
+      // Throw error if no result (zero rows found is the SQL equivalent of
+      // Mongoose's "no document" / invalid ObjectId case)
       if (!result) {
         throw { name: 'ValidationError' };
       }
 
       // Continue process if result is returned
 
-      const fileId = modelName.toLowerCase() + '-' + result._id + '.pdf';
+      const fileId = modelName.toLowerCase() + '-' + result.id + '.pdf';
       const folderPath = modelName.toLowerCase();
       const targetLocation = `src/public/download/${folderPath}/${fileId}`;
       await custom.generatePdf(
@@ -44,7 +51,7 @@ module.exports = downloadPdf = async (req, res, { directory, id }) => {
       });
     }
   } catch (error) {
-    // If error is thrown by Mongoose due to required validations
+    // If error is thrown due to required validations / not-found row
     if (error.name == 'ValidationError') {
       return res.status(400).json({
         success: false,
@@ -53,7 +60,9 @@ module.exports = downloadPdf = async (req, res, { directory, id }) => {
         message: 'Required fields are not supplied',
       });
     } else if (error.name == 'BSONTypeError') {
-      // If error is thrown by Mongoose due to invalid ID
+      // Kept for parity with the previous Mongoose-based error handling.
+      // Under SQL a malformed id simply fails the query or matches zero
+      // rows, which is handled by the ValidationError branch above.
       return res.status(400).json({
         success: false,
         result: null,

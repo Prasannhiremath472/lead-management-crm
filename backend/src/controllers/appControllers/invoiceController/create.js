@@ -1,6 +1,5 @@
-const mongoose = require('mongoose');
-
-const Model = mongoose.model('Invoice');
+const pool = require('@/db/pool');
+const { withMongoIdShim } = require('@/db/queryBuilder');
 
 const { calculate } = require('@/helpers');
 const { increaseBySettingKey } = require('@/middlewares/settings');
@@ -28,45 +27,102 @@ const create = async (req, res) => {
 
   //Calculate the items array with subTotal, total, taxTotal
   items.map((item) => {
-    let total = calculate.multiply(item['quantity'], item['price']);
+    let itemTotal = calculate.multiply(item['quantity'], item['price']);
     //sub total
-    subTotal = calculate.add(subTotal, total);
+    subTotal = calculate.add(subTotal, itemTotal);
     //item total
-    item['total'] = total;
+    item['total'] = itemTotal;
   });
   taxTotal = calculate.multiply(subTotal, taxRate / 100);
   total = calculate.add(subTotal, taxTotal);
 
-  body['subTotal'] = subTotal;
-  body['taxTotal'] = taxTotal;
-  body['total'] = total;
-  body['items'] = items;
+  const paymentStatus = calculate.sub(total, discount) === 0 ? 'paid' : 'unpaid';
 
-  let paymentStatus = calculate.sub(total, discount) === 0 ? 'paid' : 'unpaid';
+  const createdBy = req.admin.id;
 
-  body['paymentStatus'] = paymentStatus;
-  body['createdBy'] = req.admin._id;
+  const conn = await pool.getConnection();
+  let insertId;
+  try {
+    await conn.beginTransaction();
 
-  // Creating a new document in the collection
-  const result = await new Model(body).save();
-  const fileId = 'invoice-' + result._id + '.pdf';
-  const updateResult = await Model.findOneAndUpdate(
-    { _id: result._id },
-    { pdf: fileId },
-    {
-      new: true,
+    const [insertResult] = await conn.query(
+      `INSERT INTO invoices
+        (removed, created_by, number, year, content, recurring, date, expired_date, client_id,
+         tax_rate, sub_total, tax_total, total, currency, credit, discount, payment_status,
+         is_overdue, approved, notes, status)
+       VALUES (0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        createdBy,
+        value.number,
+        value.year,
+        value.content || null,
+        value.recurring || null,
+        value.date,
+        value.expiredDate,
+        value.client,
+        taxRate,
+        subTotal,
+        taxTotal,
+        total,
+        value.currency || 'NA',
+        value.credit || 0,
+        discount,
+        paymentStatus,
+        value.isOverdue ? 1 : 0,
+        value.approved ? 1 : 0,
+        value.notes || null,
+        value.status,
+      ]
+    );
+
+    insertId = insertResult.insertId;
+
+    if (items.length > 0) {
+      const itemRows = items.map((item, index) => [
+        insertId,
+        item.itemName,
+        item.description || null,
+        item.quantity,
+        item.price,
+        item.total,
+        index,
+      ]);
+      await conn.query(
+        `INSERT INTO invoice_items (invoice_id, item_name, description, quantity, price, total, sort_order)
+         VALUES ?`,
+        [itemRows]
+      );
     }
-  ).exec();
-  // Returning successfull response
 
+    const fileId = 'invoice-' + insertId + '.pdf';
+    await conn.query('UPDATE invoices SET pdf = ? WHERE id = ?', [fileId, insertId]);
+
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+
+  // Non-transactional side effect, matching current (pre-rewrite) behavior
+  // where this call is fire-and-forget after the document is saved.
   increaseBySettingKey({
     settingKey: 'last_invoice_number',
   });
 
-  // Returning successfull response
+  const [invoiceRows] = await pool.query('SELECT * FROM invoices WHERE id = ?', [insertId]);
+  const [itemsRows] = await pool.query(
+    'SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order',
+    [insertId]
+  );
+
+  const result = withMongoIdShim(invoiceRows[0]);
+  result.items = itemsRows;
+
   return res.status(200).json({
     success: true,
-    result: updateResult,
+    result,
     message: 'Invoice created successfully',
   });
 };

@@ -1,9 +1,8 @@
-const mongoose = require('mongoose');
-
-const Model = mongoose.model('Setting');
+const pool = require('@/db/pool');
+const { serializeValue } = require('@/db/models/settingModel');
 
 const updateManySetting = async (req, res) => {
-  // req/body = [{settingKey:"",settingValue}]
+  // req.body = { settings: [{settingKey:"",settingValue}] }
   let settingsHasError = false;
   const updateDataArray = [];
   const { settings } = req.body;
@@ -16,12 +15,7 @@ const updateManySetting = async (req, res) => {
 
     const { settingKey, settingValue } = setting;
 
-    updateDataArray.push({
-      updateOne: {
-        filter: { settingKey: settingKey },
-        update: { settingValue: settingValue },
-      },
-    });
+    updateDataArray.push({ settingKey, settingValue });
   }
 
   if (updateDataArray.length === 0) {
@@ -38,20 +32,55 @@ const updateManySetting = async (req, res) => {
       message: 'Settings provided has Error',
     });
   }
-  const result = await Model.bulkWrite(updateDataArray);
 
-  if (!result || result.nMatched < 1) {
-    return res.status(404).json({
-      success: false,
-      result: null,
-      message: 'No settings found by to update',
-    });
-  } else {
+  const connection = await pool.getConnection();
+  let totalAffected = 0;
+
+  try {
+    await connection.beginTransaction();
+
+    for (const { settingKey, settingValue } of updateDataArray) {
+      const [existingRows] = await connection.query(
+        'SELECT value_type FROM settings WHERE setting_key = ?',
+        [settingKey]
+      );
+      const existing = existingRows[0];
+
+      if (!existing) {
+        continue;
+      }
+
+      const serializedValue = serializeValue(existing.value_type, settingValue);
+
+      const [updateResult] = await connection.query(
+        'UPDATE settings SET setting_value = ? WHERE setting_key = ?',
+        [serializedValue, settingKey]
+      );
+
+      totalAffected += updateResult.affectedRows;
+    }
+
+    if (totalAffected < 1) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        result: null,
+        message: 'No settings found by to update',
+      });
+    }
+
+    await connection.commit();
+
     return res.status(200).json({
       success: true,
       result: [],
       message: 'we update all settings',
     });
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
 };
 

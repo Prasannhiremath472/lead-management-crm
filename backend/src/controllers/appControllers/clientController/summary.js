@@ -1,7 +1,6 @@
-const mongoose = require('mongoose');
 const moment = require('moment');
 
-const InvoiceModel = mongoose.model('Invoice');
+const pool = require('@/db/pool');
 
 const summary = async (Model, req, res) => {
   let defaultType = 'month';
@@ -21,65 +20,22 @@ const summary = async (Model, req, res) => {
   let startDate = currentDate.clone().startOf(defaultType);
   let endDate = currentDate.clone().endOf(defaultType);
 
-  const pipeline = [
-    {
-      $facet: {
-        totalClients: [
-          {
-            $match: {
-              removed: false,
-              enabled: true,
-            },
-          },
-          {
-            $count: 'count',
-          },
-        ],
-        newClients: [
-          {
-            $match: {
-              removed: false,
-              created: { $gte: startDate.toDate(), $lte: endDate.toDate() },
-              enabled: true,
-            },
-          },
-          {
-            $count: 'count',
-          },
-        ],
-        activeClients: [
-          {
-            $lookup: {
-              from: InvoiceModel.collection.name,
-              localField: '_id', // Match _id from ClientModel
-              foreignField: 'client', // Match client field in InvoiceModel
-              as: 'invoice',
-            },
-          },
-          {
-            $match: {
-              'invoice.removed': false,
-            },
-          },
-          {
-            $group: {
-              _id: '$_id',
-            },
-          },
-          {
-            $count: 'count',
-          },
-        ],
-      },
-    },
-  ];
+  const [[totalClientsRows], [newClientsRows], [activeClientsRows]] = await Promise.all([
+    pool.query(`SELECT COUNT(*) AS count FROM clients WHERE removed = 0 AND enabled = 1`),
+    pool.query(
+      `SELECT COUNT(*) AS count FROM clients WHERE removed = 0 AND enabled = 1 AND created BETWEEN ? AND ?`,
+      [startDate.toDate(), endDate.toDate()]
+    ),
+    pool.query(
+      `SELECT COUNT(DISTINCT c.id) AS count FROM clients c
+       JOIN invoices i ON i.client_id = c.id AND i.removed = 0
+       WHERE c.removed = 0 AND c.enabled = 1`
+    ),
+  ]);
 
-  const aggregationResult = await Model.aggregate(pipeline);
-
-  const result = aggregationResult[0];
-  const totalClients = result.totalClients[0] ? result.totalClients[0].count : 0;
-  const totalNewClients = result.newClients[0] ? result.newClients[0].count : 0;
-  const activeClients = result.activeClients[0] ? result.activeClients[0].count : 0;
+  const totalClients = totalClientsRows[0] ? totalClientsRows[0].count : 0;
+  const totalNewClients = newClientsRows[0] ? newClientsRows[0].count : 0;
+  const activeClients = activeClientsRows[0] ? activeClientsRows[0].count : 0;
 
   const totalActiveClientsPercentage = totalClients > 0 ? (activeClients / totalClients) * 100 : 0;
   const totalNewClientsPercentage = totalClients > 0 ? (totalNewClients / totalClients) * 100 : 0;

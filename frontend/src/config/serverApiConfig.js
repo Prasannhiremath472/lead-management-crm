@@ -8,7 +8,9 @@ export const BASE_URL =
     : 'http://localhost:8888/';
 
 export const WEBSITE_URL = import.meta.env.PROD
-  ? 'http://cloud.idurarapp.com/'
+  ? typeof window !== 'undefined'
+    ? window.location.origin + '/'
+    : '/'
   : 'http://localhost:3000/';
 export const DOWNLOAD_BASE_URL =
   import.meta.env.PROD || import.meta.env.VITE_DEV_REMOTE
@@ -18,6 +20,7 @@ export const ACCESS_TOKEN_NAME = 'x-auth-token';
 
 export const FILE_BASE_URL = import.meta.env.VITE_FILE_BASE_URL;
 
-//  console.log(
-//    '🚀 Welcome to IDURAR ERP CRM! Did you know that we also offer commercial customization services? Contact us at hello@idurarapp.com for more information.'
-//  );
+// AGPLv3 compliance: this app's complete source (including modifications)
+// must be made available to users of this hosted service. Configure this
+// to point at the Git repository where the source is published.
+export const SOURCE_CODE_URL = import.meta.env.VITE_SOURCE_CODE_URL;

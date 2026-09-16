@@ -1,4 +1,7 @@
-const filter = async (Model, req, res) => {
+const pool = require('@/db/pool');
+const { buildFilterClause, withMongoIdShim } = require('@/db/queryBuilder');
+
+const filter = async (modelDef, req, res) => {
   if (req.query.filter === undefined || req.query.equal === undefined) {
     return res.status(403).json({
       success: false,
@@ -6,26 +9,26 @@ const filter = async (Model, req, res) => {
       message: 'filter not provided correctly',
     });
   }
-  const result = await Model.find({
-    removed: false,
-  })
-    .where(req.query.filter)
-    .equals(req.query.equal)
-    .exec();
-  if (!result) {
-    return res.status(404).json({
+
+  const filterClause = buildFilterClause(modelDef, req.query.filter, req.query.equal);
+  if (!filterClause) {
+    return res.status(403).json({
       success: false,
       result: null,
-      message: 'No document found ',
-    });
-  } else {
-    // Return success resposne
-    return res.status(200).json({
-      success: true,
-      result,
-      message: 'Successfully found all documents  ',
+      message: 'filter not provided correctly',
     });
   }
+
+  const [rows] = await pool.query(
+    `SELECT * FROM ${modelDef.tableName} WHERE removed = 0 AND ${filterClause.clause}`,
+    filterClause.values
+  );
+
+  return res.status(200).json({
+    success: true,
+    result: withMongoIdShim(rows),
+    message: 'Successfully found all documents  ',
+  });
 };
 
 module.exports = filter;

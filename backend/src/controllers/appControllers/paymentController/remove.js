@@ -1,14 +1,17 @@
-const mongoose = require('mongoose');
-
-const Model = mongoose.model('Payment');
-const Invoice = mongoose.model('Invoice');
+const pool = require('@/db/pool');
+const { withMongoIdShim } = require('@/db/queryBuilder');
 
 const remove = async (req, res) => {
-  // Find document by id and updates with the required fields
-  const previousPayment = await Model.findOne({
-    _id: req.params.id,
-    removed: false,
-  });
+  // Explicit JOIN replacing the old mongoose-autopopulate on `previousPayment.invoice`.
+  const [rows] = await pool.query(
+    `SELECT p.id, p.amount AS previous_amount, p.invoice_id,
+            i.total, i.discount, i.credit AS previous_credit
+     FROM payments p JOIN invoices i ON i.id = p.invoice_id
+     WHERE p.id = ? AND p.removed = 0`,
+    [req.params.id]
+  );
+
+  const previousPayment = rows[0];
 
   if (!previousPayment) {
     return res.status(404).json({
@@ -18,50 +21,52 @@ const remove = async (req, res) => {
     });
   }
 
-  const { _id: paymentId, amount: previousAmount } = previousPayment;
-  const { id: invoiceId, total, discount, credit: previousCredit } = previousPayment.invoice;
+  const {
+    previous_amount: previousAmount,
+    invoice_id: invoiceId,
+    total,
+    discount,
+    previous_credit: previousCredit,
+  } = previousPayment;
 
-  // Find the document by id and delete it
-  let updates = {
-    removed: true,
-  };
-  // Find the document by id and delete it
-  const result = await Model.findOneAndUpdate(
-    { _id: req.params.id, removed: false },
-    { $set: updates },
-    {
-      new: true, // return the new result instead of the old one
-    }
-  ).exec();
-  // If no results found, return document not found
-
-  let paymentStatus =
+  // Ported verbatim: the current code uses raw arithmetic here (not the
+  // calculate.* decimal-safe helper), unlike create.js/update.js.
+  const paymentStatus =
     total - discount === previousCredit - previousAmount
       ? 'paid'
       : previousCredit - previousAmount > 0
       ? 'partially'
       : 'unpaid';
 
-  const updateInvoice = await Invoice.findOneAndUpdate(
-    { _id: invoiceId },
-    {
-      $pull: {
-        payment: paymentId,
-      },
-      $inc: { credit: -previousAmount },
-      $set: {
-        paymentStatus: paymentStatus,
-      },
-    },
-    {
-      new: true, // return the new result instead of the old one
-    }
-  ).exec();
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    await conn.query('UPDATE payments SET removed = 1 WHERE id = ? AND removed = 0', [
+      req.params.id,
+    ]);
+
+    await conn.query('UPDATE invoices SET credit = credit - ?, payment_status = ? WHERE id = ?', [
+      previousAmount,
+      paymentStatus,
+      invoiceId,
+    ]);
+
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+
+  const [removedRows] = await pool.query('SELECT * FROM payments WHERE id = ?', [req.params.id]);
 
   return res.status(200).json({
     success: true,
-    result,
+    result: withMongoIdShim(removedRows[0]),
     message: 'Successfully Deleted the document ',
   });
 };
+
 module.exports = remove;

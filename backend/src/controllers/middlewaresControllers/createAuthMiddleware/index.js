@@ -7,30 +7,16 @@ const resetPassword = require('./resetPassword');
 const createAuthMiddleware = (userModel) => {
   let authMethods = {};
 
-  authMethods.isValidAuthToken = (req, res, next) =>
-    isValidAuthToken(req, res, next, {
-      userModel,
-    });
+  authMethods.isValidAuthToken = (req, res, next) => isValidAuthToken(req, res, next);
 
-  authMethods.login = (req, res) =>
-    login(req, res, {
-      userModel,
-    });
+  authMethods.login = (req, res) => login(req, res);
 
-  authMethods.forgetPassword = (req, res) =>
-    forgetPassword(req, res, {
-      userModel,
-    });
+  authMethods.forgetPassword = (req, res) => forgetPassword(req, res);
 
-  authMethods.resetPassword = (req, res) =>
-    resetPassword(req, res, {
-      userModel,
-    });
+  authMethods.resetPassword = (req, res) => resetPassword(req, res);
 
-  authMethods.logout = (req, res) =>
-    logout(req, res, {
-      userModel,
-    });
+  authMethods.logout = (req, res) => logout(req, res);
+
   return authMethods;
 };
 
