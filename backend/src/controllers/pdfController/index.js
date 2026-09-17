@@ -1,7 +1,8 @@
 const pug = require('pug');
 const fs = require('fs');
+const path = require('path');
 const moment = require('moment');
-let pdf = require('html-pdf');
+const puppeteer = require('puppeteer-core');
 const { listAllSettings, loadSettings } = require('@/middlewares/settings');
 const { getData } = require('@/middlewares/serverData');
 const useLanguage = require('@/locale/useLanguage');
@@ -12,6 +13,10 @@ const pugFiles = ['invoice', 'offer', 'quote', 'payment'];
 require('dotenv').config({ path: '.env' });
 require('dotenv').config({ path: '.env.local' });
 
+// Maps the old html-pdf `format` values ('A4'/'A5'/...) to a Puppeteer
+// PDF page size, since Puppeteer expects lowercase format names.
+const toPuppeteerFormat = (format) => (format || 'A4').toLowerCase();
+
 exports.generatePdf = async (
   modelName,
   info = { filename: 'pdf_file', format: 'A5', targetLocation: '' },
@@ -20,6 +25,10 @@ exports.generatePdf = async (
 ) => {
   try {
     const { targetLocation } = info;
+
+    // ensure the target directory exists (it's not tracked in git since
+    // it starts out empty)
+    fs.mkdirSync(path.dirname(targetLocation), { recursive: true });
 
     // if PDF already exists, then delete it and create a new PDF
     if (fs.existsSync(targetLocation)) {
@@ -67,16 +76,27 @@ exports.generatePdf = async (
         moment: moment,
       });
 
-      pdf
-        .create(htmlContent, {
-          format: info.format,
-          orientation: 'portrait',
-          border: '10mm',
-        })
-        .toFile(targetLocation, function (error) {
-          if (error) throw new Error(error);
-          if (callback) callback();
+      const browser = await puppeteer.launch({
+        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH,
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      });
+
+      try {
+        const page = await browser.newPage();
+        await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
+        await page.pdf({
+          path: targetLocation,
+          format: toPuppeteerFormat(info.format),
+          landscape: false,
+          margin: { top: '10mm', right: '10mm', bottom: '10mm', left: '10mm' },
+          printBackground: true,
         });
+      } finally {
+        await browser.close();
+      }
+
+      if (callback) callback();
     }
   } catch (error) {
     throw new Error(error);

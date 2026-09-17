@@ -1,6 +1,31 @@
 const custom = require('@/controllers/pdfController');
 const pool = require('@/db/pool');
 const { getModel } = require('@/db/models');
+const { withMongoIdShim } = require('@/db/queryBuilder');
+
+// PDF templates (Invoice.pug/Payment.pug/Quote.pug) expect the same
+// nested-object shape the app's read/list controllers already build to
+// replicate the old Mongoose autopopulate behavior (see
+// invoiceController/read.js). Rebuild that shape here for whichever
+// entity is being downloaded, rather than a bare `SELECT *`.
+async function enrichForPdf(modelName, result) {
+  if (result.client_id) {
+    const [clientRows] = await pool.query('SELECT * FROM clients WHERE id = ?', [result.client_id]);
+    if (clientRows[0]) result.client = withMongoIdShim(clientRows[0]);
+  }
+  if (result.created_by) {
+    const [adminRows] = await pool.query('SELECT id, name FROM admins WHERE id = ?', [result.created_by]);
+    if (adminRows[0]) result.createdBy = withMongoIdShim(adminRows[0]);
+  }
+  if (modelName === 'Invoice') {
+    const [itemRows] = await pool.query(
+      'SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order',
+      [result.id]
+    );
+    result.items = itemRows;
+  }
+  return result;
+}
 
 module.exports = downloadPdf = async (req, res, { directory, id }) => {
   try {
@@ -14,13 +39,15 @@ module.exports = downloadPdf = async (req, res, { directory, id }) => {
 
     if (modelDef) {
       const [rows] = await pool.query(`SELECT * FROM ${modelDef.tableName} WHERE id = ?`, [id]);
-      const result = rows[0];
+      let result = rows[0];
 
       // Throw error if no result (zero rows found is the SQL equivalent of
       // Mongoose's "no document" / invalid ObjectId case)
       if (!result) {
         throw { name: 'ValidationError' };
       }
+
+      result = await enrichForPdf(modelName, result);
 
       // Continue process if result is returned
 
