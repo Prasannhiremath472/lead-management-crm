@@ -1,6 +1,6 @@
 const bcrypt = require('bcryptjs');
 
-const { generate: uniqueId } = require('shortid');
+const { nanoid: uniqueId } = require('nanoid');
 
 const pool = require('@/db/pool');
 

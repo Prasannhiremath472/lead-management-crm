@@ -4,7 +4,7 @@ const pool = require('@/db/pool');
 
 const checkAndCorrectURL = require('./checkAndCorrectURL');
 const sendMail = require('./sendMail');
-const shortid = require('shortid');
+const { nanoid } = require('nanoid');
 const { loadSettings } = require('@/middlewares/settings');
 
 const { useAppSettings } = require('@/settings');
@@ -47,7 +47,7 @@ const forgetPassword = async (req, res) => {
   );
   const databasePassword = passwordRows[0];
 
-  const resetToken = shortid.generate();
+  const resetToken = nanoid();
   await pool.query('UPDATE admin_passwords SET reset_token = ? WHERE admin_id = ?', [resetToken, user.id]);
 
   const settings = useAppSettings();

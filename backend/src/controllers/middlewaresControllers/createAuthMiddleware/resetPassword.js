@@ -5,7 +5,7 @@ const Joi = require('joi');
 const pool = require('@/db/pool');
 const { withMongoIdShim } = require('@/db/queryBuilder');
 
-const shortid = require('shortid');
+const { nanoid } = require('nanoid');
 
 const resetPassword = async (req, res) => {
   const { password, userId, resetToken } = req.body;
@@ -59,10 +59,10 @@ const resetPassword = async (req, res) => {
     });
   }
 
-  const salt = shortid.generate();
+  const salt = nanoid();
   const hashedPassword = bcrypt.hashSync(salt + password);
-  const emailToken = shortid.generate();
-  const newResetToken = shortid.generate();
+  const emailToken = nanoid();
+  const newResetToken = nanoid();
 
   const token = jwt.sign(
     {
