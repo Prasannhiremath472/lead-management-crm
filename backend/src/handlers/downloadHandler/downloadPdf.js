@@ -3,12 +3,31 @@ const pool = require('@/db/pool');
 const { getModel } = require('@/db/models');
 const { withMongoIdShim } = require('@/db/queryBuilder');
 
-// PDF templates (Invoice.pug/Payment.pug/Quote.pug) expect the same
+// PDF templates (Invoice.pug/Payment.pug/Quote.pug/Offer.pug/Order.pug) were
+// authored against the old Mongoose camelCase field names (subTotal,
+// taxTotal, taxRate, expiredDate, item.itemName) and expect the same
 // nested-object shape the app's read/list controllers already build to
 // replicate the old Mongoose autopopulate behavior (see
-// invoiceController/read.js). Rebuild that shape here for whichever
-// entity is being downloaded, rather than a bare `SELECT *`.
+// invoiceController/read.js). The MySQL columns are snake_case, so alias
+// them to the casing the templates already use, rather than rewriting
+// every .pug file.
+function withPugCasingAliases(row) {
+  if (row.sub_total !== undefined) row.subTotal = row.sub_total;
+  if (row.tax_total !== undefined) row.taxTotal = row.tax_total;
+  if (row.tax_rate !== undefined) row.taxRate = row.tax_rate;
+  if (row.expired_date !== undefined) row.expiredDate = row.expired_date;
+  return row;
+}
+
+function withItemCasingAliases(items) {
+  return items.map((item) => {
+    if (item.item_name !== undefined) item.itemName = item.item_name;
+    return item;
+  });
+}
+
 async function enrichForPdf(modelName, result) {
+  withPugCasingAliases(result);
   if (result.client_id) {
     const [clientRows] = await pool.query('SELECT * FROM clients WHERE id = ?', [result.client_id]);
     if (clientRows[0]) result.client = withMongoIdShim(clientRows[0]);
@@ -22,7 +41,25 @@ async function enrichForPdf(modelName, result) {
       'SELECT * FROM invoice_items WHERE invoice_id = ? ORDER BY sort_order',
       [result.id]
     );
-    result.items = itemRows;
+    result.items = withItemCasingAliases(itemRows);
+  } else if (modelName === 'Quote') {
+    const [itemRows] = await pool.query(
+      'SELECT * FROM quote_items WHERE quote_id = ? ORDER BY sort_order',
+      [result.id]
+    );
+    result.items = withItemCasingAliases(itemRows);
+  } else if (modelName === 'Offer') {
+    const [itemRows] = await pool.query(
+      'SELECT * FROM offer_items WHERE offer_id = ? ORDER BY sort_order',
+      [result.id]
+    );
+    result.items = withItemCasingAliases(itemRows);
+  } else if (modelName === 'Order') {
+    const [itemRows] = await pool.query(
+      'SELECT * FROM order_items WHERE order_id = ? ORDER BY sort_order',
+      [result.id]
+    );
+    result.items = withItemCasingAliases(itemRows);
   }
   return result;
 }

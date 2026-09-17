@@ -26,6 +26,9 @@ import {
   FilterOutlined,
   WalletOutlined,
   ReconciliationOutlined,
+  ShoppingOutlined,
+  AppstoreOutlined,
+  FolderOutlined,
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -59,6 +62,16 @@ function Sidebar({ collapsible, isMobile = false }) {
       icon: <CustomerServiceOutlined />,
       label: <Link to={'/customer'}>{translate('customers')}</Link>,
     },
+    {
+      key: 'lead',
+      icon: <FilterOutlined />,
+      label: <Link to={'/lead'}>{translate('leads')}</Link>,
+    },
+    {
+      key: 'company',
+      icon: <ShopOutlined />,
+      label: <Link to={'/company'}>{translate('companies')}</Link>,
+    },
 
     {
       key: 'invoice',
@@ -66,9 +79,44 @@ function Sidebar({ collapsible, isMobile = false }) {
       label: <Link to={'/invoice'}>{translate('invoices')}</Link>,
     },
     {
+      key: 'quote',
+      icon: <FileOutlined />,
+      label: <Link to={'/quote'}>{translate('quotes')}</Link>,
+    },
+    {
+      key: 'offer',
+      icon: <TagOutlined />,
+      label: <Link to={'/offer'}>{translate('offers')}</Link>,
+    },
+    {
+      key: 'order',
+      icon: <ShoppingOutlined />,
+      label: <Link to={'/order'}>{translate('orders')}</Link>,
+    },
+    {
       key: 'payment',
       icon: <CreditCardOutlined />,
       label: <Link to={'/payment'}>{translate('payments')}</Link>,
+    },
+    {
+      key: 'product',
+      icon: <TagsOutlined />,
+      label: <Link to={'/product'}>{translate('products')}</Link>,
+    },
+    {
+      key: 'productCategory',
+      icon: <AppstoreOutlined />,
+      label: <Link to={'/productCategory'}>{translate('products_category')}</Link>,
+    },
+    {
+      key: 'expense',
+      icon: <WalletOutlined />,
+      label: <Link to={'/expense'}>{translate('expenses')}</Link>,
+    },
+    {
+      key: 'expenseCategory',
+      icon: <FolderOutlined />,
+      label: <Link to={'/expenseCategory'}>{translate('expenses_category')}</Link>,
     },
     {
       key: 'generalSettings',

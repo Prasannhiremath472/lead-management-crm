@@ -131,8 +131,10 @@ function LoadQuoteForm({ subTotal = 0, current = null }) {
                 { value: 'draft', label: translate('Draft') },
                 { value: 'pending', label: translate('Pending') },
                 { value: 'sent', label: translate('Sent') },
+                { value: 'negotiation', label: translate('Negotiation') },
                 { value: 'accepted', label: translate('Accepted') },
                 { value: 'declined', label: translate('Declined') },
+                { value: 'cancelled', label: translate('Cancelled') },
               ]}
             ></Select>
           </Form.Item>

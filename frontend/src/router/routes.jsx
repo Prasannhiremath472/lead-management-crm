@@ -25,6 +25,28 @@ const Profile = lazy(() => import('@/pages/Profile'));
 
 const About = lazy(() => import('@/pages/About'));
 
+const Quote = lazy(() => import('@/pages/Quote'));
+const QuoteCreate = lazy(() => import('@/pages/Quote/QuoteCreate'));
+const QuoteRead = lazy(() => import('@/pages/Quote/QuoteRead'));
+const QuoteUpdate = lazy(() => import('@/pages/Quote/QuoteUpdate'));
+
+const Offer = lazy(() => import('@/pages/Offer'));
+const OfferCreate = lazy(() => import('@/pages/Offer/OfferCreate'));
+const OfferRead = lazy(() => import('@/pages/Offer/OfferRead'));
+const OfferUpdate = lazy(() => import('@/pages/Offer/OfferUpdate'));
+
+const Order = lazy(() => import('@/pages/Order'));
+const OrderCreate = lazy(() => import('@/pages/Order/OrderCreate'));
+const OrderRead = lazy(() => import('@/pages/Order/OrderRead'));
+const OrderUpdate = lazy(() => import('@/pages/Order/OrderUpdate'));
+
+const Product = lazy(() => import('@/pages/Product'));
+const ProductCategory = lazy(() => import('@/pages/ProductCategory'));
+const Expense = lazy(() => import('@/pages/Expense'));
+const ExpenseCategory = lazy(() => import('@/pages/ExpenseCategory'));
+const Company = lazy(() => import('@/pages/Company'));
+const Lead = lazy(() => import('@/pages/Lead'));
+
 let routes = {
   expense: [],
   default: [
@@ -80,6 +102,82 @@ let routes = {
     {
       path: '/payment/update/:id',
       element: <PaymentUpdate />,
+    },
+
+    {
+      path: '/quote',
+      element: <Quote />,
+    },
+    {
+      path: '/quote/create',
+      element: <QuoteCreate />,
+    },
+    {
+      path: '/quote/read/:id',
+      element: <QuoteRead />,
+    },
+    {
+      path: '/quote/update/:id',
+      element: <QuoteUpdate />,
+    },
+
+    {
+      path: '/offer',
+      element: <Offer />,
+    },
+    {
+      path: '/offer/create',
+      element: <OfferCreate />,
+    },
+    {
+      path: '/offer/read/:id',
+      element: <OfferRead />,
+    },
+    {
+      path: '/offer/update/:id',
+      element: <OfferUpdate />,
+    },
+
+    {
+      path: '/order',
+      element: <Order />,
+    },
+    {
+      path: '/order/create',
+      element: <OrderCreate />,
+    },
+    {
+      path: '/order/read/:id',
+      element: <OrderRead />,
+    },
+    {
+      path: '/order/update/:id',
+      element: <OrderUpdate />,
+    },
+
+    {
+      path: '/product',
+      element: <Product />,
+    },
+    {
+      path: '/productCategory',
+      element: <ProductCategory />,
+    },
+    {
+      path: '/expense',
+      element: <Expense />,
+    },
+    {
+      path: '/expenseCategory',
+      element: <ExpenseCategory />,
+    },
+    {
+      path: '/company',
+      element: <Company />,
+    },
+    {
+      path: '/lead',
+      element: <Lead />,
     },
 
     {

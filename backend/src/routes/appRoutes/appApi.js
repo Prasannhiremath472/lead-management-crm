@@ -16,8 +16,12 @@ const routerApp = (entity, controller) => {
   router.route(`/${entity}/filter`).get(catchErrors(controller['filter']));
   router.route(`/${entity}/summary`).get(catchErrors(controller['summary']));
 
-  if (entity === 'invoice' || entity === 'payment') {
+  if (['invoice', 'payment', 'quote', 'offer', 'order'].includes(entity)) {
     router.route(`/${entity}/mail`).post(catchErrors(controller['mail']));
+  }
+
+  if (entity === 'quote' || entity === 'lead') {
+    router.route(`/${entity}/convert/:id`).get(catchErrors(controller['convert']));
   }
 };
 

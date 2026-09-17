@@ -280,6 +280,31 @@ function FormElement({ field, feedback, setFeedback }) {
     );
   };
 
+  const AsyncEntitySelectComponent = () => {
+    return (
+      <Form.Item
+        label={translate(field.label)}
+        name={field.name}
+        rules={[
+          {
+            required: field.required || false,
+            type: filedType[field.type] ?? 'any',
+          },
+        ]}
+      >
+        <AutoCompleteAsync
+          entity={field.entity}
+          displayLabels={field.displayLabels}
+          searchFields={field.searchFields}
+          outputValue={field.outputValue}
+          withRedirect={field.withRedirect}
+          urlToRedirect={field.urlToRedirect}
+          redirectLabel={field.redirectLabel}
+        ></AutoCompleteAsync>
+      </Form.Item>
+    );
+  };
+
   const formItemComponent = {
     select: <SelectComponent />,
     selectWithTranslation: <SelectWithTranslationComponent />,
@@ -292,6 +317,7 @@ function FormElement({ field, feedback, setFeedback }) {
     array: <ArrayComponent />,
     country: <CountryComponent />,
     search: <SearchComponent />,
+    asyncEntitySelect: <AsyncEntitySelectComponent />,
   };
 
   const compunedComponent = {

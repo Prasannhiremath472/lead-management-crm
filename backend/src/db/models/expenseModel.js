@@ -1,0 +1,22 @@
+module.exports = {
+  tableName: 'expenses',
+  entity: 'expense',
+  primaryKey: 'id',
+  columns: [
+    'id',
+    'removed',
+    'category_id',
+    'description',
+    'amount',
+    'date',
+    'receipt',
+    'notes',
+    'created_by',
+    'created',
+    'updated',
+  ],
+  filterableFields: ['category_id', 'created_by'],
+  searchableFields: ['description', 'notes'],
+  sortableFields: ['date', 'amount', 'created', 'updated'],
+  defaultSort: 'date',
+};
