@@ -5,9 +5,16 @@ const dispatchSettingsData = (datas) => {
   const settingsCategory = {};
 
   datas.map((data) => {
-    settingsCategory[data.settingCategory] = {
-      ...settingsCategory[data.settingCategory],
-      [data.settingKey]: data.settingValue,
+    // Backend rows come back as snake_case (setting_category/setting_key/
+    // setting_value) from the MySQL-backed API; fall back to the older
+    // camelCase names in case any caller still passes those.
+    const category = data.setting_category ?? data.settingCategory;
+    const key = data.setting_key ?? data.settingKey;
+    const value = data.setting_value ?? data.settingValue;
+
+    settingsCategory[category] = {
+      ...settingsCategory[category],
+      [key]: value,
     };
   });
 
