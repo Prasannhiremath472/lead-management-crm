@@ -1,14 +1,15 @@
 import React from 'react';
 
 import { Layout } from 'antd';
-import { Divider, Row, Col } from 'antd';
+import { Divider, Row, Col, Typography } from 'antd';
+import Card from '@/components/Card';
 
 const { Content } = Layout;
+const { Title } = Typography;
 
 const TopCard = ({ title, cardContent }) => {
   return (
-    <div
-      className="whiteBox shadow"
+    <Card
       style={{
         color: '#595959',
         fontSize: 13,
@@ -16,15 +17,18 @@ const TopCard = ({ title, cardContent }) => {
         minHeight: 'auto',
         marginBottom: '24px',
       }}
+      bodyStyle={{ padding: 0 }}
     >
       <div className="pad20 strong" style={{ textAlign: 'center', justifyContent: 'center' }}>
-        <h2 style={{ color: '#22075e', marginBottom: 0, marginTop: 0 }}>{title}</h2>
+        <Title level={2} style={{ marginBottom: 0, marginTop: 0 }}>
+          {title}
+        </Title>
       </div>
       {/* <Divider style={{ padding: 0, margin: 0 }}></Divider>
       <div className="pad15" style={{ textAlign: 'center', justifyContent: 'center' }}>
         {cardContent}
       </div> */}
-    </div>
+    </Card>
   );
 };
 
@@ -52,11 +56,14 @@ export default function SettingsLayout({
             md={{ span: 17 }}
             lg={{ span: 18 }}
           >
-            <div className="whiteBox shadow" style={{ minHeight: '480px', maxWidth: '800px' }}>
+            <Card
+              style={{ minHeight: '480px', maxWidth: '800px' }}
+              bodyStyle={{ padding: 0 }}
+            >
               <Row className="pad40" gutter={[0, 0]}>
                 <Col span={24}>{children}</Col>
               </Row>
-            </div>
+            </Card>
           </Col>
           <Col
             className="gutter-row"
@@ -66,9 +73,9 @@ export default function SettingsLayout({
             lg={{ span: 6 }}
           >
             <TopCard title={topCardTitle} cardContent={topCardContent} />
-            <div className="whiteBox shadow" style={{ minHeight: '280px' }}>
+            <Card style={{ minHeight: '280px' }}>
               <Row gutter={[0, 0]}>{bottomCardContent}</Row>
-            </div>
+            </Card>
           </Col>
         </Row>
       </Content>

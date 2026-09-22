@@ -18,34 +18,33 @@ import { selectListItems } from '@/redux/crud/selectors';
 import useLanguage from '@/locale/useLanguage';
 import { dataForTable } from '@/utils/dataStructure';
 import { useMoney, useDate } from '@/settings';
+import EmptyState from '@/components/EmptyState';
 
 import { generate as uniqueId } from 'shortid';
 
 import { useCrudContext } from '@/context/crud';
 
-function AddNewItem({ config }) {
-  const { crudContextAction } = useCrudContext();
-  const { collapsedBox, panel } = crudContextAction;
+function AddNewItem({ config, onClick }) {
   const { ADD_NEW_ENTITY } = config;
 
-  const handelClick = () => {
-    panel.open();
-    collapsedBox.close();
-  };
-
   return (
-    <Button onClick={handelClick} type="primary">
+    <Button onClick={onClick} type="primary">
       {ADD_NEW_ENTITY}
     </Button>
   );
 }
 export default function DataTable({ config, extra = [] }) {
-  let { entity, dataTableColumns, DATATABLE_TITLE, fields, searchConfig } = config;
+  let { entity, dataTableColumns, DATATABLE_TITLE, ENTITY_NAME, fields, searchConfig } = config;
   const { crudContextAction } = useCrudContext();
   const { panel, collapsedBox, modal, readBox, editBox, advancedBox } = crudContextAction;
   const translate = useLanguage();
   const { moneyFormatter } = useMoney();
   const { dateFormat } = useDate();
+
+  const handleAddNew = () => {
+    panel.open();
+    collapsedBox.close();
+  };
 
   const items = [
     {
@@ -137,8 +136,10 @@ export default function DataTable({ config, extra = [] }) {
           }}
           trigger={['click']}
         >
-          <EllipsisOutlined
-            style={{ cursor: 'pointer', fontSize: '24px' }}
+          <Button
+            type="text"
+            className="rowActionTrigger"
+            icon={<EllipsisOutlined style={{ fontSize: '20px', color: 'var(--gray-500)' }} />}
             onClick={(e) => e.preventDefault()}
           />
         </Dropdown>
@@ -193,10 +194,10 @@ export default function DataTable({ config, extra = [] }) {
             {translate('Refresh')}
           </Button>,
 
-          <AddNewItem key={`${uniqueId()}`} config={config} />,
+          <AddNewItem key={`${uniqueId()}`} config={config} onClick={handleAddNew} />,
         ]}
         style={{
-          padding: '20px 0px',
+          padding: '24px 0px',
         }}
       ></PageHeader>
 
@@ -208,6 +209,15 @@ export default function DataTable({ config, extra = [] }) {
         loading={listIsLoading}
         onChange={handelDataTableLoad}
         scroll={{ x: true }}
+        locale={{
+          emptyText: (
+            <EmptyState
+              entityLabel={ENTITY_NAME || translate('items')}
+              onAdd={handleAddNew}
+              addLabel={config.ADD_NEW_ENTITY}
+            />
+          ),
+        }}
       />
     </>
   );

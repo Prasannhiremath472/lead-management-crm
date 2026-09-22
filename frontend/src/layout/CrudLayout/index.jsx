@@ -3,11 +3,9 @@ import { useEffect, useState } from 'react';
 import DefaultLayout from '../DefaultLayout';
 
 import SidePanel from '@/components/SidePanel';
-import { Layout } from 'antd';
+import Card from '@/components/Card';
 import { useCrudContext } from '@/context/crud';
 import { useAppContext } from '@/context/appContext';
-
-const { Content } = Layout;
 
 const ContentBox = ({ children }) => {
   const { state: stateCrud, crudContextAction } = useCrudContext();
@@ -37,8 +35,7 @@ const ContentBox = ({ children }) => {
   //   }
   // }, [isNavMenuClose]);
   return (
-    <Content
-      className="whiteBox shadow layoutPadding"
+    <Card
       style={{
         margin: '30px auto',
         width: '100%',
@@ -47,7 +44,7 @@ const ContentBox = ({ children }) => {
       }}
     >
       {children}
-    </Content>
+    </Card>
   );
 };
 

@@ -22,17 +22,13 @@ import { useErpContext } from '@/context/erp';
 import { useNavigate } from 'react-router-dom';
 
 import { DOWNLOAD_BASE_URL } from '@/config/serverApiConfig';
+import EmptyState from '@/components/EmptyState';
 
-function AddNewItem({ config }) {
-  const navigate = useNavigate();
-  const { ADD_NEW_ENTITY, entity } = config;
-
-  const handleClick = () => {
-    navigate(`/${entity.toLowerCase()}/create`);
-  };
+function AddNewItem({ config, onClick }) {
+  const { ADD_NEW_ENTITY } = config;
 
   return (
-    <Button onClick={handleClick} type="primary" icon={<PlusOutlined />}>
+    <Button onClick={onClick} type="primary" icon={<PlusOutlined />}>
       {ADD_NEW_ENTITY}
     </Button>
   );
@@ -40,7 +36,12 @@ function AddNewItem({ config }) {
 
 export default function DataTable({ config, extra = [] }) {
   const translate = useLanguage();
-  let { entity, dataTableColumns, disableAdd = false, searchConfig } = config;
+  let { entity, dataTableColumns, disableAdd = false, searchConfig, ENTITY_NAME } = config;
+  const navigate = useNavigate();
+
+  const handleAddNew = () => {
+    navigate(`/${entity.toLowerCase()}/create`);
+  };
 
   const { DATATABLE_TITLE } = config;
 
@@ -78,8 +79,6 @@ export default function DataTable({ config, extra = [] }) {
       icon: <DeleteOutlined />,
     },
   ];
-
-  const navigate = useNavigate();
 
   const handleRead = (record) => {
     dispatch(erp.currentItem({ data: record }));
@@ -139,8 +138,10 @@ export default function DataTable({ config, extra = [] }) {
           }}
           trigger={['click']}
         >
-          <EllipsisOutlined
-            style={{ cursor: 'pointer', fontSize: '24px' }}
+          <Button
+            type="text"
+            className="rowActionTrigger"
+            icon={<EllipsisOutlined style={{ fontSize: '20px', color: 'var(--gray-500)' }} />}
             onClick={(e) => e.preventDefault()}
           />
         </Dropdown>
@@ -194,10 +195,10 @@ export default function DataTable({ config, extra = [] }) {
             {translate('Refresh')}
           </Button>,
 
-          !disableAdd && <AddNewItem config={config} key="add-new-item" />,
+          !disableAdd && <AddNewItem config={config} onClick={handleAddNew} key="add-new-item" />,
         ]}
         style={{
-          padding: '20px 0px',
+          padding: '24px 0px',
         }}
       ></PageHeader>
 
@@ -209,6 +210,15 @@ export default function DataTable({ config, extra = [] }) {
         loading={listIsLoading}
         onChange={handelDataTableLoad}
         scroll={{ x: true }}
+        locale={{
+          emptyText: (
+            <EmptyState
+              entityLabel={ENTITY_NAME || translate('items')}
+              onAdd={disableAdd ? undefined : handleAddNew}
+              addLabel={config.ADD_NEW_ENTITY}
+            />
+          ),
+        }}
       />
     </>
   );
